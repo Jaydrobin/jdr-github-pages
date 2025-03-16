@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>D&D 스타일 RPG 전투 시스템</title>
+    <style>
+        :root {
+            --primary-color: #422800;
+            --secondary-color: #a98467;
+            --accent-color: #bc6c25;
+            --background-color: #ede0d4;
+            --grid-color: #ddbea9;
+            --player-color: #0077b6;
+            --enemy-color: #d62828;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--background-color);
+            color: var(--primary-color);
+            line-height: 1.6;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        h1, h2, h3 {
+            color: var(--primary-color);
+        }
+
+        .game-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .battle-grid {
+            flex: 2;
+            min-width: 600px;
+            height: 600px;
+            background-color: #5a3921;
+            border: 2px solid var(--primary-color);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            grid-template-rows: repeat(10, 1fr);
+            width: 100%;
+            height: 100%;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="50" height="50" x="0" y="0" fill="%23654321" /><rect width="50" height="50" x="50" y="50" fill="%23654321" /><rect width="50" height="50" x="50" y="0" fill="%23765432" /><rect width="50" height="50" x="0" y="50" fill="%23765432" /></svg>');
+            background-size: 60px 60px;
+        }
+
+        .cell {
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+        }
+
+        .cell:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .wall {
+            background-color: #2f2f2f;
+        }
+
+        .water {
+            background-color: #4a80bd;
+        }
+
+        .high-ground {
+            background-color: #8d6e63;
+        }
+
+        .character {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            position: absolute;
+            transform: translate(-50%, -50%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            z-index: 10;
+            cursor: grab;
+            transition: all 0.3s ease;
+        }
+
+        .player {
+            background-color: var(--player-color);
+            color: white;
+            border: 2px solid #004c8c;
+        }
+
+        .enemy {
+            background-color: var(--enemy-color);
+            color: white;
+            border: 2px solid #9e0000;
+        }
+
+        .ui-panel {
+            flex: 1;
+            min-width: 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .character-sheet, .action-panel, .log-panel, .terrain-tools {
+            background-color: #f5f5f5;
+            border: 1px solid var(--secondary-color);
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .character-sheet h3, .action-panel h3, .log-panel h3, .terrain-tools h3 {
+            border-bottom: 2px solid var(--secondary-color);
+            padding-bottom: 8px;
+            margin-bottom: 10px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .stat {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .btn {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            margin: 5px 0;
+            transition: background-color 0.2s;
+        }
+
+        .btn:hover {
+            background-color: #a85c21;
+        }
+
+        .btn-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .btn-terrain {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            font-size: 20px;
+        }
+
+        .log-content {
+            height: 150px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 8px;
+            background-color: #fff;
+            font-size: 14px;
+        }
+
+        .log-entry {
+            margin-bottom: 4px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .log-player {
+            color: var(--player-color);
+        }
+
+        .log-enemy {
+            color: var(--enemy-color);
+        }
+
+        .log-system {
+            color: #555;
+            font-style: italic;
+        }
+
+        .health-bar {
+            height: 10px;
+            background-color: #e63946;
+            border-radius: 5px;
+            margin-top: 5px;
+        }
+
+        .dice-roller {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #ccc;
+        }
+
+        .dice {
+            font-size: 24px;
+            margin: 0 5px;
+        }
+
+        @media (max-width: 950px) {
+            .game-container {
+                flex-direction: column;
+            }
+            .battle-grid {
+                min-width: 100%;
+                height: 400px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>D&D 스타일 RPG 전투 시스템</h1>
+        <p>캐릭터를 드래그하여 이동시키고, 능력치와 행동을 관리하세요.</p>
+    </header>
+
+    <div class="game-container">
+        <div class="battle-grid">
+            <div class="grid" id="battleGrid"></div>
+        </div>
+
+        <div class="ui-panel">
+            <div class="character-sheet">
+                <h3>캐릭터 정보</h3>
+                <div id="characterInfo">
+                    <h4 id="charName">아무 캐릭터도 선택되지 않음</h4>
+                    <div class="health-container">
+                        <div class="stat">
+                            <span>HP:</span>
+                            <span id="charHP">-</span>
+                        </div>
+                        <div class="health-bar" id="healthBar" style="width: 0%"></div>
+                    </div>
+                    <div class="stats" id="charStats">
+                        <div class="stat">
+                            <span>힘:</span>
+                            <span>-</span>
+                        </div>
+                        <div class="stat">
+                            <span>민첩:</span>
+                            <span>-</span>
+                        </div>
+                        <div class="stat">
+                            <span>체력:</span>
+                            <span>-</span>
+                        </div>
+                        <div class="stat">
+                            <span>지능:</span>
+                            <span>-</span>
+                        </div>
+                        <div class="stat">
+                            <span>지혜:</span>
+                            <span>-</span>
+                        </div>
+                        <div class="stat">
+                            <span>매력:</span>
+                            <span>-</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="dice-roller">
+                    <h4>주사위 굴리기</h4>
+                    <div class="btn-group">
+                        <button class="btn" onclick="rollDice(4)">D4</button>
+                        <button class="btn" onclick="rollDice(6)">D6</button>
+                        <button class="btn" onclick="rollDice(8)">D8</button>
+                        <button class="btn" onclick="rollDice(10)">D10</button>
+                        <button class="btn" onclick="rollDice(12)">D12</button>
+                        <button class="btn" onclick="rollDice(20)">D20</button>
+                    </div>
+                    <div id="diceResult" style="margin-top: 10px; font-size: 18px;">결과: -</div>
+                </div>
+            </div>
+
+            <div class="action-panel">
+                <h3>행동</h3>
+                <div class="btn-group">
+                    <button class="btn" id="attackBtn" disabled>공격</button>
+                    <button class="btn" id="moveBtn" disabled>이동</button>
+                    <button class="btn" id="skillBtn" disabled>스킬</button>
+                    <button class="btn" id="itemBtn" disabled>아이템</button>
+                </div>
+                <div id="actionResult" style="margin-top: 10px;"></div>
+            </div>
+
+            <div class="terrain-tools">
+                <h3>지형 도구</h3>
+                <div class="btn-group">
+                    <button class="btn btn-terrain" id="normalTerrain" title="일반 지형">🟫</button>
+                    <button class="btn btn-terrain" id="wallTerrain" title="벽">⬛</button>
+                    <button class="btn btn-terrain" id="waterTerrain" title="물">🟦</button>
+                    <button class="btn btn-terrain" id="highGroundTerrain" title="높은 지형">🟧</button>
+                    <button class="btn" id="addPlayer">플레이어 추가</button>
+                    <button class="btn" id="addEnemy">적 추가</button>
+                    <button class="btn" id="resetGrid">지형 초기화</button>
+                </div>
+            </div>
+
+            <div class="log-panel">
+                <h3>전투 로그</h3>
+                <div class="log-content" id="battleLog">
+                    <div class="log-entry log-system">전투가 시작되었습니다. 캐릭터를 선택하고 행동을 취하세요.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 게임 상태 관리
+        const gameState = {
+            characters: [],
+            selectedCharacter: null,
+            selectedTerrain: 'normal',
+            currentTurn: 0,
+            battleLog: []
+        };
+
+        // 캐릭터 클래스
+        class Character {
+            constructor(name, type, x, y) {
+                this.id = Date.now() + Math.floor(Math.random() * 1000);
+                this.name = name;
+                this.type = type; // 'player' 또는 'enemy'
+                this.x = x;
+                this.y = y;
+                this.stats = {
+                    strength: this.rollStat(),
+                    dexterity: this.rollStat(),
+                    constitution: this.rollStat(),
+                    intelligence: this.rollStat(),
+                    wisdom: this.rollStat(),
+                    charisma: this.rollStat()
+                };
+                this.maxHp = 10 + this.getModifier(this.stats.constitution);
+                this.hp = this.maxHp;
+                this.level = 1;
+                this.armorClass = 10 + this.getModifier(this.stats.dexterity);
+                this.initiative = this.rollDice(20) + this.getModifier(this.stats.dexterity);
+            }
+
+            rollStat() {
+                // 4d6, 가장 낮은 주사위 제외
+                const rolls = [
+                    Math.floor(Math.random() * 6) + 1,
+                    Math.floor(Math.random() * 6) + 1,
+                    Math.floor(Math.random() * 6) + 1,
+                    Math.floor(Math.random() * 6) + 1
+                ];
+                return rolls.sort((a, b) => a - b).slice(1).reduce((sum, val) => sum + val, 0);
+            }
+
+            rollDice(sides) {
+                return Math.floor(Math.random() * sides) + 1;
+            }
+
+            getModifier(stat) {
+                return Math.floor((stat - 10) / 2);
+            }
+
+            attack(target) {
+                const attackRoll = this.rollDice(20);
+                const modifier = this.getModifier(this.stats.strength);
+                const totalRoll = attackRoll + modifier;
+                
+                const attackMessage = `${this.name}이(가) ${target.name}에게 공격을 시도합니다. (주사위: ${attackRoll} + 수정치: ${modifier} = ${totalRoll})`;
+                addLogEntry(attackMessage, this.type);
+
+                if (totalRoll >= target.armorClass) {
+                    // 공격 성공
+                    const damageRoll = this.rollDice(6);
+                    const damageTotal = Math.max(1, damageRoll + modifier);
+                    target.hp = Math.max(0, target.hp - damageTotal);
+                    
+                    const damageMessage = `${this.name}이(가) ${target.name}에게 ${damageTotal}의 피해를 입혔습니다! (${target.name} HP: ${target.hp}/${target.maxHp})`;
+                    addLogEntry(damageMessage, this.type);
+                    
+                    if (target.hp <= 0) {
+                        const defeatMessage = `${target.name}이(가) 쓰러졌습니다!`;
+                        addLogEntry(defeatMessage, 'system');
+                    }
+                    return true;
+                } else {
+                    // 공격 실패
+                    const missMessage = `${this.name}의 공격이 빗나갔습니다! (${target.name}의 방어도: ${target.armorClass})`;
+                    addLogEntry(missMessage, this.type);
+                    return false;
+                }
+            }
+        }
+
+        // DOM 요소 참조
+        const battleGrid = document.getElementById('battleGrid');
+        const battleLog = document.getElementById('battleLog');
+        const attackBtn = document.getElementById('attackBtn');
+        const moveBtn = document.getElementById('moveBtn');
+        const skillBtn = document.getElementById('skillBtn');
+        const itemBtn = document.getElementById('itemBtn');
+        const diceResult = document.getElementById('diceResult');
+
+        // 지형 버튼 참조
+        const normalTerrain = document.getElementById('normalTerrain');
+        const wallTerrain = document.getElementById('wallTerrain');
+        const waterTerrain = document.getElementById('waterTerrain');
+        const highGroundTerrain = document.getElementById('highGroundTerrain');
+        const addPlayerBtn = document.getElementById('addPlayer');
+        const addEnemyBtn = document.getElementById('addEnemy');
+        const resetGridBtn = document.getElementById('resetGrid');
+
+        // 그리드 초기화
+        function initGrid() {
+            battleGrid.innerHTML = '';
+            
+            for (let row = 0; row < 10; row++) {
+                for (let col = 0; col < 10; col++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.row = row;
+                    cell.dataset.col = col;
+                    cell.addEventListener('click', handleCellClick);
+                    battleGrid.appendChild(cell);
+                }
+            }
+        }
+
+        // 캐릭터 렌더링
+        function renderCharacters() {
+            // 기존 캐릭터 요소 제거
+            document.querySelectorAll('.character').forEach(el => el.remove());
+            
+            // 캐릭터 다시 렌더링
+            gameState.characters.forEach(character => {
+                const charElement = document.createElement('div');
+                charElement.className = `character ${character.type}`;
+                charElement.textContent = character.name.charAt(0);
+                charElement.dataset.id = character.id;
+                charElement.style.left = `${(character.x * 60) + 30}px`;
+                charElement.style.top = `${(character.y * 60) + 30}px`;
+                
+                // 드래그 기능 추가
+                charElement.draggable = true;
+                charElement.addEventListener('dragstart', handleDragStart);
+                charElement.addEventListener('click', () => selectCharacter(character));
+                
+                battleGrid.appendChild(charElement);
+            });
+        }
+
+        // 캐릭터 선택
+        function selectCharacter(character) {
+            gameState.selectedCharacter = character;
+            updateCharacterInfo(character);
+            
+            // 버튼 활성화
+            attackBtn.disabled = false;
+            moveBtn.disabled = false;
+            skillBtn.disabled = false;
+            itemBtn.disabled = false;
+            
+            // 선택된 캐릭터 강조
+            document.querySelectorAll('.character').forEach(el => {
+                el.style.boxShadow = 'none';
+            });
+            
+            const charElement = document.querySelector(`.character[data-id="${character.id}"]`);
+            if (charElement) {
+                charElement.style.boxShadow = '0 0 10px 5px yellow';
+            }
+            
+            addLogEntry(`${character.name}을(를) 선택했습니다.`, 'system');
+        }
+
+        // 캐릭터 정보 업데이트
+        function updateCharacterInfo(character) {
+            if (!character) {
+                document.getElementById('charName').textContent = '아무 캐릭터도 선택되지 않음';
+                document.getElementById('charHP').textContent = '-';
+                document.getElementById('healthBar').style.width = '0%';
+                
+                const statElements = document.querySelectorAll('#charStats .stat span:nth-child(2)');
+                statElements.forEach(el => el.textContent = '-');
+                return;
+            }
+            
+            document.getElementById('charName').textContent = character.name;
+            document.getElementById('charHP').textContent = `${character.hp}/${character.maxHp}`;
+            document.getElementById('healthBar').style.width = `${(character.hp / character.maxHp) * 100}%`;
+            
+            const stats = [
+                character.stats.strength,
+                character.stats.dexterity,
+                character.stats.constitution,
+                character.stats.intelligence,
+                character.stats.wisdom,
+                character.stats.charisma
+            ];
+            
+            const statElements = document.querySelectorAll('#charStats .stat span:nth-child(2)');
+            statElements.forEach((el, index) => {
+                const stat = stats[index];
+                const modifier = Math.floor((stat - 10) / 2);
+                el.textContent = `${stat} (${modifier >= 0 ? '+' + modifier : modifier})`;
+            });
+        }
+
+        // 전투 로그에 항목 추가
+        function addLogEntry(message, type = 'system') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = message;
+            battleLog.appendChild(entry);
+            battleLog.scrollTop = battleLog.scrollHeight;
+            
+            // 로그 기록에 저장
+            gameState.battleLog.push({ message, type });
+        }
+
+        // 주사위 굴리기
+        function rollDice(sides) {
+            const result = Math.floor(Math.random() * sides) + 1;
+            diceResult.textContent = `결과: ${result} (D${sides})`;
+            
+            // 주사위 효과 추가
+            const dice = document.createElement('span');
+            dice.className = 'dice';
+            dice.textContent = `🎲${result}`;
+            dice.style.position = 'absolute';
+            dice.style.left = `${Math.random() * 300}px`;
+            dice.style.top = `${Math.random() * 100}px`;
+            dice.style.opacity = '1';
+            dice.style.transform = 'scale(1)';
+            dice.style.transition = 'all 1s ease-out';
+            
+            document.querySelector('.dice-roller').appendChild(dice);
+            
+            setTimeout(() => {
+                dice.style.opacity = '0';
+                dice.style.transform = 'scale(0.5) translateY(-20px)';
+            }, 100);
+            
+            setTimeout(() => {
+                dice.remove();
+            }, 1100);
+            
+            return result;
+        }
+
+        // 셀 클릭 핸들러
+        function handleCellClick(event) {
+            const row = parseInt(event.target.dataset.row);
+            const col = parseInt(event.target.dataset.col);
+            
+            // 선택된 지형 적용
+            if (gameState.selectedTerrain === 'normal') {
+                event.target.className = 'cell';
+            } else {
+                event.target.className = `cell ${gameState.selectedTerrain}`;
+            }
+        }
+
+        // 드래그 시작 핸들러
+        function handleDragStart(event) {
+            const charId = event.target.dataset.id;
+            const character = gameState.characters.find(c => c.id.toString() === charId);
+            
+            if (character) {
+                selectCharacter(character);
+                event.dataTransfer.setData('text/plain', charId);
+                event.dataTransfer.effectAllowed = 'move';
+            }
+        }
+
+        // 드래그 영역 설정
+        battleGrid.addEventListener('dragover', function(event) {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+        });
+
+        // 드롭 핸들러
+        battleGrid.addEventListener('drop', function(event) {
+            event.preventDefault();
+            const charId = event.dataTransfer.getData('text/plain');
+            const character = gameState.characters.find(c => c.id.toString() === charId);
+            
+            if (character) {
+                // 그리드 크기를 고려하여 위치 계산
+                const rect = battleGrid.getBoundingClientRect();
+                const x = Math.floor((event.clientX - rect.left) / 60);
+                const y = Math.floor((event.clientY - rect.top) / 60);
+                
+                // 그리드 경계 확인
+                if (x >= 0 && x < 10 && y >= 0 && y < 10) {
+                    character.x = x;
+                    character.y = y;
+                    addLogEntry(`${character.name}이(가) 이동했습니다.`, character.type);
+                    renderCharacters();
+                }
+            }
+        });
+
+        // 지형 선택 버튼 이벤트
+        normalTerrain.addEventListener('click', () => {
+            gameState.selectedTerrain = 'normal';
+            highlightSelectedTerrain(normalTerrain);
+        });
+
+        wallTerrain.addEventListener('click', () => {
+            gameState.selectedTerrain = 'wall';
+            highlightSelectedTerrain(wallTerrain);
+        });
+
+        waterTerrain.addEventListener('click', () => {
+            gameState.selectedTerrain = 'water';
+            highlightSelectedTerrain(waterTerrain);
+        });
+
+        highGroundTerrain.addEventListener('click', () => {
+            gameState.selectedTerrain = 'high-ground';
+            highlightSelectedTerrain(highGroundTerrain);
+        });
+
+        // 선택된 지형 버튼 강조
+        function highlightSelectedTerrain(button) {
+            document.querySelectorAll('.btn-terrain').forEach(btn => {
+                btn.style.boxShadow = 'none';
+            });
+            button.style.boxShadow = '0 0 5px 2px var(--accent-color)';
+        }
+
+        // 플레이어 추가
+        addPlayerBtn.addEventListener('click', () => {
+            const playerCount = gameState.characters.filter(c => c.type === 'player').length;
+            const playerName = prompt('플레이어 이름을 입력하세요:', `플레이어 ${playerCount + 1}`);
+            
+            if (playerName) {
+                const player = new Character(
+                    playerName,
+                    'player',
+                    Math.floor(Math.random() * 3),
+                    Math.floor(Math.random() * 10)
+                );
+                
+                gameState.characters.push(player);
+                addLogEntry(`${playerName}이(가) 전투에 참여했습니다.`, 'player');
+                renderCharacters();
+            }
+        });
+
+        // 적 추가
+        addEnemyBtn.addEventListener('click', () => {
+            const enemyCount = gameState.characters.filter(c => c.type === 'enemy').length;
+            const enemyName = prompt('적 이름을 입력하세요:', `적 ${enemyCount + 1}`);
+            
+            if (enemyName) {
+                const enemy = new Character(
+                    enemyName,
+                    'enemy',
+                    7 + Math.floor(Math.random() * 3),
+                    Math.floor(Math.random() * 10)
+                );
+                
+                gameState.characters.push(enemy);
+                addLogEntry(`${enemyName}이(가) 전투에 나타났습니다!`, 'enemy');
+                renderCharacters();
+            }
+        });
+
+        // 공격 버튼 이벤트
+        attackBtn.addEventListener('click', () => {
+            if (!gameState.selectedCharacter) {
+                alert('캐릭터를 먼저 선택하세요.');
+                return;
+            }
+            
+            // 가장 가까운 적 찾기
+            const attacker = gameState.selectedCharacter;
+            const targets = gameState.characters.filter(c => c.type !== attacker.type && c.hp > 0);
+            
+            if (targets.length === 0) {
+                addLogEntry('공격할 대상이 없습니다.', 'system');
+                return;
+            }
+            
+            // 간단하게 첫 번째 적을 공격
+            const target = targets[0];
+            
+            // 공격 실행
+            attacker.attack(target);
+            
+            // 업데이트
+            renderCharacters();
+            updateCharacterInfo(attacker);
+        });
+
+        // 이동 버튼 이벤트
+        moveBtn.addEventListener('click', () => {
+            if (!gameState.selectedCharacter) {
+                alert('캐릭터를 먼저 선택하세요.');
+                return;
+            }
+            
+            addLogEntry('캐릭터를 드래그하여 이동시키세요.', 'system');
+        });
+
+        // 초기화 버튼
+        resetGridBtn.addEventListener('click', () => {
+            if (confirm('지형을 초기화하시겠습니까?')) {
+                initGrid();
+                addLogEntry('지형이 초기화되었습니다.', 'system');
+            }
+        });
+
+        // 초기화
+        function init() {
+            initGrid();
+            renderCharacters();
+            highlightSelectedTerrain(normalTerrain);
+            
+            // 기본 캐릭터 생성
+            const player = new Character('용사', 'player', 2, 5);
+            const enemy = new Character('고블린', 'enemy', 7, 5);
+            
+            gameState.characters.push(player, enemy);
+            renderCharacters();
+            
+            addLogEntry('전투 시스템이 초기화되었습니다. 캐릭터를 선택하고 행동을 취하세요.', 'system');
+        }
+
+        // 페이지 로딩 시 초기화
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
